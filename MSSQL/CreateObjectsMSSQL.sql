@@ -21,7 +21,7 @@ go
 select * from VW_Places
 go
 
---2.2) Вывод всех объектов недвижимости, типа – дом, с указанием участка;
+--2.2) Вывод всех объектов недвижимости, типа – дом
 
 create or alter view VW_Build
 as
@@ -37,7 +37,7 @@ go
 select * from VW_Build
 go
 
---2.3) Вывод всех объектов недвижимости, типа – квартира, с указанием дома;
+--2.3) Вывод всех объектов недвижимости, типа – квартира;
 
 create or alter view VW_Flat
 as
@@ -205,7 +205,7 @@ go
 		--4.3) Проверка на запрет участка в доме, участке или квартире;}
 
 
-create or alter trigger TR_DifferencePlaceBlock--Добавить проверку на поля
+create or alter trigger TR_DifferencePlaceBlock
 on EstateRelation
 for insert,update
 as
@@ -271,8 +271,23 @@ on Client
 for insert,update
 as
 begin
-	if((select IsLegalEntity from inserted)=1)
-	print '[Запрет добавления данных для юр. лица в физ. Лицо]'
-	rollback tran
+	if (exists(select * from inserted where IsLegalEntity=1 and ((PasportNumber is not NULL or PasportSeries is not NULL) or (CompanyTitle is NULL or INN is NULL or KPP is NULL or OGRN is NULL or PaymentAccount is NULL or CorrespondentAccount is NULL or BIK is NULL))))
+	begin
+		print '[Запрет добавления данных для юр. лица в физ. Лицо]'
+		rollback tran
+	end
+	if (exists(select * from inserted where IsLegalEntity=0 and ((PasportNumber is NULL or PasportSeries is NULL)  or (CompanyTitle is not NULL or INN is not NULL or KPP is not NULL or OGRN is not NULL or PaymentAccount is not NULL or CorrespondentAccount is not NULL or BIK is not NULL))))
+	begin
+		print '[Запрет добавления данных для физ. лица в юр. Лицо]'
+		rollback tran
+	end
 end
+go
+
+update Client
+set PasportNumber = Null,
+PasportSeries = Null
+where IDClient=1
+go
+select top 1 * from Client
 go
