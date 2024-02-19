@@ -21,11 +21,12 @@ go
 select * from VW_Places
 go
 
---2.2) Вывод всех объектов недвижимости, типа – дом
+--2.2) Вывод всех объектов недвижимости, типа – дом, со всеми квартирами в нём
 
 create or alter view VW_Build
 as
-select [Square], Price, DateOfDefinition, DateOfApplication, Number,Adress, Postindex, t.Title,FormatTitle, STRING_AGG(fr.IDFlatEstate,', ') as 'Flats'
+select [Square], Price, DateOfDefinition, DateOfApplication, Number,Adress, Postindex, t.Title,FormatTitle, 
+STRING_AGG(fr.IDFlatEstate,', ') as 'Flats'
 from EstateObject e
 join Postindex p on e.IDPostIndex=p.IDPostindex
 join TypeOfActivity t on t.IDTypeOfActivity=e.IDTypeOfActivity
@@ -96,6 +97,9 @@ go
 exec PR_AddCommonCost 1,-100
 go
 
+select * from EstateObject eo join EstateRelation er on eo.IDEstateObject=er.IDBuildingEstate where er.IDPlaceEstate=1
+go
+
 
 --2.2) Повышение/Понижение цены квартир, находящихся в 1м общем доме;
 create or alter proc PR_AddCommonFlatCost
@@ -139,6 +143,9 @@ go
 
 exec PR_AddCommonFlatCost 4,100
 go
+
+select eo.* from EstateObject eo join FlatRelation fl on eo.IDEstateObject=fl.IDFlatEstate where fl.IDBuildEstate=4
+go
 --Functions
 
 --3.1) Получение списка всех квартир с возможностью указания дома;
@@ -173,20 +180,18 @@ go
 select * from FN_AllBuilds(1)
 
 select * from FN_AllFlats((select top 1 IDEstateObject from FN_AllBuilds(1))) --Список всех квартир на участке(Узнать насчёт массивов)
-
---3.2) Получение списка истории продаж определённого объекта недвижимости;
-
-select IDEstateObject,COUNT(IDEstateObject)
-from [Check]
-group by IDEstateObject
-having COUNT(IDEstateObject)>1
 go
+--3.2) Получение списка истории продаж определённого объекта недвижимости;
 
 create or alter function FN_HistoryCheck(@IDEstateObject int)
 returns table
 as
 	return(
-		(select ch.IDCheck,ch.DateOfTheSale,ch.FullCost,Concat(e.LastName,' ',e.FirstName,' ', e.Patronymic) as 'Employee',Concat(cl.LastName,' ',cl.FirstName,' ', cl.Patronymic) as 'Client',ch.IDEstateObject,(select top 1 FullCost from [Check] where IDEstateObject=@IDEstateObject order by DateOfTheSale) as 'ActualCost',(select top 1 Concat(cl.LastName,' ',cl.FirstName,' ', cl.Patronymic) from [Check] ch join Client cl on ch.IDClient=cl.IDClient where IDEstateObject=@IDEstateObject order by DateOfTheSale) as 'ActualClient'
+		(select ch.IDCheck,ch.DateOfTheSale,ch.FullCost,Concat(e.LastName,' ',e.FirstName,' ', e.Patronymic) as 'Employee',
+		Concat(cl.LastName,' ',cl.FirstName,' ', cl.Patronymic) as 'Client',ch.IDEstateObject,
+		(select top 1 FullCost from [Check] where IDEstateObject=@IDEstateObject order by DateOfTheSale) as 'ActualCost',
+		(select top 1 Concat(cl.LastName,' ',cl.FirstName,' ', cl.Patronymic) from [Check] ch join Client cl on ch.IDClient=cl.IDClient 
+		where IDEstateObject=@IDEstateObject order by DateOfTheSale) as 'ActualClient'
 		from [Check] ch
 		join Client cl on ch.IDClient=cl.IDClient
 		join Employee e on ch.IDEmployee=e.IDEmployee
@@ -222,6 +227,11 @@ begin
 	end
 end
 go
+
+update EstateRelation
+set IDBuildingEstate = 1
+where IDEstateRelation = 1
+
 ----
 disable trigger TR_DifferencePlaceBlock
 on estaterelation
@@ -251,6 +261,10 @@ begin
 end
 go
 
+update FlatRelation
+set IDFlatEstate = 4
+where IDFlatRelation = 1
+
 
 ----
 disable trigger TR_DifferenceFlatBlock
@@ -271,12 +285,16 @@ on Client
 for insert,update
 as
 begin
-	if (exists(select * from inserted where IsLegalEntity=1 and ((PasportNumber is not NULL or PasportSeries is not NULL) or (CompanyTitle is NULL or INN is NULL or KPP is NULL or OGRN is NULL or PaymentAccount is NULL or CorrespondentAccount is NULL or BIK is NULL))))
+	if (exists(select * from inserted where IsLegalEntity=1 and ((PasportNumber is not NULL or PasportSeries is not NULL) 
+	or (CompanyTitle is NULL or INN is NULL or KPP is NULL or OGRN is NULL or PaymentAccount is NULL or CorrespondentAccount is NULL 
+	or BIK is NULL))))
 	begin
 		print '[Запрет добавления данных для юр. лица в физ. Лицо]'
 		rollback tran
 	end
-	if (exists(select * from inserted where IsLegalEntity=0 and ((PasportNumber is NULL or PasportSeries is NULL)  or (CompanyTitle is not NULL or INN is not NULL or KPP is not NULL or OGRN is not NULL or PaymentAccount is not NULL or CorrespondentAccount is not NULL or BIK is not NULL))))
+	if (exists(select * from inserted where IsLegalEntity=0 and ((PasportNumber is NULL or PasportSeries is NULL)  
+	or (CompanyTitle is not NULL or INN is not NULL or KPP is not NULL or OGRN is not NULL or PaymentAccount is not NULL 
+	or CorrespondentAccount is not NULL or BIK is not NULL))))
 	begin
 		print '[Запрет добавления данных для физ. лица в юр. Лицо]'
 		rollback tran
@@ -285,8 +303,8 @@ end
 go
 
 update Client
-set PasportNumber = Null,
-PasportSeries = Null
+set PasportNumber = 1111,
+PasportSeries = 2222
 where IDClient=1
 go
 select top 1 * from Client
