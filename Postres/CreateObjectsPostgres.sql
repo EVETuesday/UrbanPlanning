@@ -5,12 +5,12 @@
 
 CREATE OR REPLACE VIEW vw_places AS
 SELECT e.id_estate_object, "square", price, e.date_of_defenition, e.date_of_application, number, 
-adress, post_index_value, t.title, format_title 
---STRING_AGG(e.number, ', ') AS builds
+adress, post_index_value, t.title, format_title,
+string_agg(concat (id_building_estate,''), ', ') AS builds
 FROM estate_object e
 JOIN post_index p ON e.id_postindex = p.id_post_index
 JOIN type_of_activity t ON t.id_type_of_activity = e.id_type_of_activity
-JOIN format f ON e.id_format = f.id_format
+JOIN "format" f ON e.id_format = f.id_format
 JOIN estate_relation er ON e.id_estate_object = er.id_place_estate
 WHERE e.id_type_of_activity=1
 GROUP BY e.id_estate_object, "square", price, e.date_of_defenition, e.date_of_application, number, 
@@ -24,7 +24,8 @@ SELECT * FROM vw_places;
 
 CREATE OR REPLACE VIEW vw_builds AS
 SELECT e.id_estate_object, "square", price, e.date_of_defenition, e.date_of_application, number, 
-adress, post_index_value, t.title, format_title 
+adress, post_index_value, t.title, format_title,
+string_agg(concat (id_flat_estate,''), ', ') AS flats
 FROM estate_object e
 JOIN post_index p ON e.id_postindex = p.id_post_index
 JOIN type_of_activity t ON t.id_type_of_activity = e.id_type_of_activity
@@ -311,3 +312,28 @@ WHERE id_client = 1;
 
 SELECT * FROM client
 where id_client = 1;
+
+
+--Автоматическая цена
+
+
+CREATE OR REPLACE FUNCTION tr_auto_full_cost()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.full_cost IS NULL then
+    	new.full_cost=(select price from estate_object eo where eo.id_estate_object=new.is_estate_object);
+    END IF;
+RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tr_auto_full_cost
+before INSERT ON "check"
+FOR EACH ROW
+EXECUTE FUNCTION tr_auto_full_cost();
+
+
+INSERT INTO "check"(date_of_the_sale, id_employee, id_client, is_estate_object)
+VALUES (NOW()::DATE, 1, 1, 1);
+
+SELECT * FROM "check";

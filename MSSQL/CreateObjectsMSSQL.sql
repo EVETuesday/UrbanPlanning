@@ -8,8 +8,8 @@ go
 --1.1) Вывод всех объектов недвижимости, типа – участок со всеми домами на нём;
 create or alter view VW_Places
 as
-select e.IDEstateObject,[Square], Price, DateOfDefinition, DateOfApplication, Number, Adress, Postindex, t.Title,FormatTitle, 
-STRING_AGG(e.Number,', ') as 'Builds'
+select e.IDEstateObject,[Square], Price, DateOfDefinition, DateOfApplication, Number, Adress, Postindex, t.Title,FormatTitle,
+STRING_AGG(er.IDBuildingEstate,', ') as 'Builds'
 from EstateObject e
 join Postindex p on e.IDPostIndex=p.IDPostindex
 join TypeOfActivity t on t.IDTypeOfActivity=e.IDTypeOfActivity
@@ -188,14 +188,15 @@ returns table
 as
 	return(
 		(select ch.IDCheck,ch.DateOfTheSale,ch.FullCost,Concat(e.LastName,' ',e.FirstName,' ', e.Patronymic) as 'Employee',
-		Concat(cl.LastName,' ',cl.FirstName,' ', cl.Patronymic) as 'Client',ch.IDEstateObject,
+		Concat(cl.LastName,' ',cl.FirstName,' ', cl.Patronymic) as 'Client',eo.IDEstateObject, eo.Adress,
 		(select top 1 FullCost from [Check] where IDEstateObject=@IDEstateObject order by DateOfTheSale) as 'ActualCost',
 		(select top 1 Concat(cl.LastName,' ',cl.FirstName,' ', cl.Patronymic) from [Check] ch join Client cl on ch.IDClient=cl.IDClient 
 		where IDEstateObject=@IDEstateObject order by DateOfTheSale) as 'ActualClient'
 		from [Check] ch
 		join Client cl on ch.IDClient=cl.IDClient
 		join Employee e on ch.IDEmployee=e.IDEmployee
-		where IDEstateObject=@IDEstateObject)
+		join EstateObject eo on ch.IDEstateObject=eo.IDEstateObject
+		where ch.IDEstateObject=@IDEstateObject)
 	)
 go
 
@@ -231,7 +232,7 @@ go
 update EstateRelation
 set IDBuildingEstate = 1
 where IDEstateRelation = 1
-
+go
 ----
 disable trigger TR_DifferencePlaceBlock
 on estaterelation
@@ -264,7 +265,7 @@ go
 update FlatRelation
 set IDFlatEstate = 4
 where IDFlatRelation = 1
-
+go
 
 ----
 disable trigger TR_DifferenceFlatBlock
@@ -309,3 +310,29 @@ where IDClient=1
 go
 select top 1 * from Client
 go
+
+
+
+create or alter trigger TR_AutoFullCost
+on [Check]
+instead of insert
+as
+begin
+if((select FullCost from inserted) is null)
+	insert into [Check](DateOfTheSale, FullCost, IDEmployee, IDClient,IDEstateObject)
+	values((select DateOfTheSale from inserted),(select eo.Price from inserted i join EstateObject eo on i.IDEstateObject=eo.IDEstateObject),
+	(select IDEmployee from inserted),(select IDClient from inserted),(select IDEstateObject from inserted))
+else
+	insert into [Check](DateOfTheSale, FullCost, IDEmployee, IDClient,IDEstateObject)
+	values((select DateOfTheSale from inserted),(select FullCost from inserted),
+	(select IDEmployee from inserted),(select IDClient from inserted),(select IDEstateObject from inserted))
+end
+go
+
+insert into [Check](DateOfTheSale, IDEmployee, IDClient,IDEstateObject)
+values(GETDATE(),1,1,1)
+
+insert into [Check](DateOfTheSale, IDEmployee, IDClient,IDEstateObject, FullCost)
+values(GETDATE(),1,1,1, 62440000.00)
+
+select * from [Check]
